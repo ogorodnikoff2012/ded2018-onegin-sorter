@@ -57,7 +57,7 @@ static int32_t next_symbol_i4(const char* pos) {
 
 static int32_t next_symbol_inv(const char* pos) {
     UNUSED(pos);
-    return 0;
+    return -1;
 }
 
 static inline bool intermediate(char ch) {

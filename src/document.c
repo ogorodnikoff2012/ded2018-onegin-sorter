@@ -5,6 +5,9 @@
 #include <string.h>
 
 #include "document.h"
+#include "unicode.h"
+#define DATA_EMPTY_PREFIX 1
+#define DATA_EMPTY_SUFFIX 1
 
 static void separate_into_lines(document_t* doc) {
     char* data_begin = doc->data;
@@ -37,6 +40,16 @@ static void separate_into_lines(document_t* doc) {
     }
 }
 
+static void remove_bom(document_t* doc) {
+    /* BOM : EF BB BF */
+    if (doc->data_size >= 3 + DATA_EMPTY_PREFIX + DATA_EMPTY_SUFFIX &&
+        doc->data[1] == '\xEF' && doc->data[2] == '\xBB' && doc->data[3] == '\xBF') {
+        for (int i = 1; i <= 3; ++i) {
+            doc->data[i] = 0;
+        }
+    }
+}
+
 document_t* read_document(const char* filename) {
     int fd = open(filename, O_RDONLY);
     if (fd == -1) {
@@ -50,18 +63,41 @@ document_t* read_document(const char* filename) {
     int filesize = filestat.st_size;
 
     document_t* doc = calloc(sizeof(document_t), 1);
-    doc->data_size = filesize + 2;
+    doc->data_size = filesize + DATA_EMPTY_PREFIX + DATA_EMPTY_SUFFIX;
     doc->data = malloc(doc->data_size);
-    doc->data[filesize + 1] = doc->data[0] = '\0';
-    if (read(fd, doc->data + 1, filesize) == -1) {
+    doc->data[filesize + DATA_EMPTY_PREFIX] = doc->data[0] = '\0';
+    if (read(fd, doc->data + DATA_EMPTY_PREFIX, filesize) == -1) {
         close_document(doc);
         return NULL;
     }
     close(fd);
 
+    remove_bom(doc);
     separate_into_lines(doc);
 
     return doc;
+}
+
+bool check_document(const document_t* doc, int* err_pos) {
+    const char* file_begin = doc->data + DATA_EMPTY_PREFIX;
+    const char* iter = file_begin;
+    const char* prev_iter = iter;
+    int32_t symbol;
+    for (int i = 0; i < doc->lines_cnt; ++i) {
+        prev_iter = iter = doc->lines[i];
+        while ((symbol = next_symbol(&iter)) > 0 && is_allowed(symbol)) { prev_iter = iter; }
+        if (symbol == 0) {
+            continue;
+        }
+        *err_pos = prev_iter - file_begin;
+        return false;
+    }
+    return true;
+}
+
+int symbol_at(const document_t* doc, int pos) {
+    const char* iter = doc->data + pos + DATA_EMPTY_PREFIX;
+    return next_symbol(&iter);
 }
 
 bool print_document(const document_t* doc, const char* filename) {

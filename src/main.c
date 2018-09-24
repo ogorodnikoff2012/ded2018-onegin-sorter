@@ -16,13 +16,24 @@ const char* TASK_NAMES[] = {"sorted", "rythms", "original"};
 const int N_TASKS = 3;
 const int TASK_NAMES_MAX_LENGTH = 40;
 
-bool check_args(int argc, char* argv[]) {
-    UNUSED(argv);
-    return argc == 2;
+typedef struct {
+    bool nocheck;
+} args_t;
+
+bool parse_args(int argc, char* argv[], args_t* args) {
+    args->nocheck = false;
+    if (argc == 2) {
+        return true;
+    }
+    if (argc == 3 && strcmp(argv[1], "-n") == 0) {
+        args->nocheck = true;
+        return true;
+    }
+    return false;
 }
 
 void print_usage(FILE* stream, const char* progname) {
-    fprintf(stream, "Usage: %s <input.txt>\n", progname);
+    fprintf(stream, "Usage: %s [-n] <input.txt>\n", progname);
 }
 
 int less_cmp(const void* a, const void* b) {
@@ -30,25 +41,34 @@ int less_cmp(const void* a, const void* b) {
 }
 
 int main(int argc, char* argv[]) {
-    if (!check_args(argc, argv)) {
+    args_t args;
+    if (!parse_args(argc, argv, &args)) {
         print_usage(stderr, argv[0]);
         return 1;
     }
-    document_t *document = read_document(argv[1]);
+
+    const char* input_filename = argv[argc - 1];
+
+    document_t *document = read_document(input_filename);
     if (document == NULL) {
-        fprintf(stderr, "Cannot read document!\n");
-        return 0;
+        fprintf(stderr, "Cannot read document %s!\n", input_filename);
+        return 1;
+    }
+    int err_pos = -1;
+    if (!args.nocheck && !check_document(document, &err_pos)) {
+        fprintf(stderr, "Bad symbol at file %s at position %d: 0x%x\n", input_filename, err_pos, symbol_at(document, err_pos));
+        return 1;
     }
 
-    int output_filename_length = strlen(argv[1]) + TASK_NAMES_MAX_LENGTH + 1;
+    int output_filename_length = strlen(input_filename) + TASK_NAMES_MAX_LENGTH + 1;
     char* output_filename = malloc(output_filename_length);
-    int last_dot = strrchr(argv[1], '.') - argv[1];
-    strncpy(output_filename, argv[1], last_dot);
+    int last_dot = strrchr(input_filename, '.') - input_filename;
+    strncpy(output_filename, input_filename, last_dot);
 
     for (int i = 0; i < N_TASKS; ++i) {
         qsort(document->lines, document->lines_cnt, sizeof(line_t), COMPARATORS[i]);
         snprintf(output_filename + last_dot, output_filename_length - last_dot, "_%s%s",
-                 TASK_NAMES[i], argv[1] + last_dot);
+                 TASK_NAMES[i], input_filename + last_dot);
         print_document(document, output_filename);
     }
     free(output_filename);
