@@ -100,18 +100,65 @@ int symbol_at(const document_t* doc, int pos) {
     return next_symbol(&iter);
 }
 
+#ifndef BUFFER_SIZE
+#define BUFFER_SIZE (2<<20)
+#endif
+
+typedef struct {
+    char data[BUFFER_SIZE];
+    int used;
+} buffer_t;
+
+static inline int write_to_buffer(buffer_t* buffer, const char* src, int len) {
+    int write_len = BUFFER_SIZE - buffer->used;
+    if (len < write_len) {
+        write_len = len;
+    }
+    memcpy(buffer->data + buffer->used, src, write_len);
+    buffer->used += write_len;
+    return write_len;
+}
+
+static inline int flush_buffer(buffer_t* buffer, int fd) {
+    int result = write(fd, buffer->data, buffer->used);
+    if (result != -1) {
+        buffer->used = 0;
+    }
+    return result;
+}
+
+static inline bool buffered_write(int fd, buffer_t* buffer, const char* str, int len) {
+    while (len > 0) {
+        int written = write_to_buffer(buffer, str, len);
+        str += written;
+        len -= written;
+        if (buffer->used == BUFFER_SIZE) {
+            int result = flush_buffer(buffer, fd);
+            if (result == -1) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool print_document(const document_t* doc, const char* filename) {
     int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (fd == -1) {
         return false;
     }
+
+    buffer_t buf;
+    buf.used = 0;
+
     for (int i = 0; i < doc->lines_cnt; ++i) {
-        if (write(fd, doc->lines[i], strlen(doc->lines[i])) == -1 ||
-            write(fd, "\n", 1) == -1) {
+        if (!buffered_write(fd, &buf, doc->lines[i], strlen(doc->lines[i])) ||
+            !buffered_write(fd, &buf, "\n", 1)) {
             close(fd);
             return false;
         }
     }
+    flush_buffer(&buf, fd);
     close(fd);
     return true;
 }
