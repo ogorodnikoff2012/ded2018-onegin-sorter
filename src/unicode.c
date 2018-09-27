@@ -17,14 +17,17 @@ static int32_t next_symbol_inv(const char*);
 const static int BYTES[] = {
     /* 0xxxxxx */
     1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1,
     /* 10xxxxxx - INVALID FIRST BYTE */
-    0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
     /* 110xxxxx */
-    2, 2,
+    2, 2, 2, 2,
     /* 1110xxxx */
-    3,
+    3, 3,
     /* 11110xxx */
-    4
+    4,
+    /* 11111xxx - INVALID BYTE */
+    0
 };
 
 const static utf8_decoder_t NEXT_SYMBOL_INTERNAL[] = {
@@ -65,7 +68,7 @@ static inline bool intermediate(char ch) {
 }
 
 #define PARSE_AND_MOVE(delta) \
-    int bytes = BYTES[(uint8_t)(**pos) >> 4]; \
+    int bytes = BYTES[(uint8_t)(**pos) >> 3]; \
     int32_t result = NEXT_SYMBOL_INTERNAL[bytes](*pos); \
     *pos += ( delta ); \
     return result;
