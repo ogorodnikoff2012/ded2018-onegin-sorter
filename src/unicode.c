@@ -94,21 +94,27 @@ static int32_t prefix##_letter(const char** pos) { \
 FIND_LETTER(next)
 FIND_LETTER(prev)
 
-#define COMPARATOR(name, iterator, move) \
+#define COMPARATOR(name, iterator, move, while_predicate) \
 int name (const void* a, const void* b) { \
     const char* str_a = *(const char **)a; \
     const char* str_b = *(const char **)b; \
+    const char* iter_a = str_a; \
+    const char* iter_b = str_b; \
     if (move) { \
-        str_a += strlen(str_a); \
-        str_b += strlen(str_b); \
+        iter_a += strlen(str_a); \
+        iter_b += strlen(str_b); \
     } \
     int32_t a_symbol, b_symbol; \
     do { \
-        a_symbol = UPPER[ iterator (&str_a)]; \
-        b_symbol = UPPER[ iterator (&str_b)]; \
-    } while (a_symbol == b_symbol && a_symbol != 0); \
+        a_symbol = UPPER[ iterator (&iter_a)]; \
+        b_symbol = UPPER[ iterator (&iter_b)]; \
+    } while ( while_predicate ); \
+    if (move && (a_symbol == b_symbol)) { \
+        a_symbol = (iter_a == str_a) ? 0 : UPPER[ iterator (&iter_a)]; \
+        b_symbol = (iter_b == str_b) ? 0 : UPPER[ iterator (&iter_b)]; \
+    } \
     return a_symbol - b_symbol; \
 }
 
-COMPARATOR(unicode_lex_cmp, next_letter, false)
-COMPARATOR(unicode_rev_lex_cmp, prev_letter, true)
+COMPARATOR(unicode_lex_cmp, next_letter, false, (a_symbol == b_symbol && a_symbol != 0))
+COMPARATOR(unicode_rev_lex_cmp, prev_letter, true, (a_symbol == b_symbol && iter_a != str_a && iter_b != str_b))
