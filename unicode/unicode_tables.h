@@ -37,8 +37,8 @@ static inline bool is_valid(const unicode_t symbol) {
 
 void check_for_validity(const char* str);
 
-extern const unicode_t UPPER[];
-extern const unicode_t LOWER[];
+extern const unicode_t UNICODE_UPPER[];
+extern const unicode_t UNICODE_LOWER[];
 extern const general_category_t CATEGORY[];
 
 #ifdef __cplusplus

@@ -109,12 +109,12 @@ int name (const void* a, const void* b) { \
     } \
     int32_t a_symbol, b_symbol; \
     do { \
-        a_symbol = UPPER[ iterator (&iter_a)]; \
-        b_symbol = UPPER[ iterator (&iter_b)]; \
+        a_symbol = UNICODE_UPPER[ iterator (&iter_a)]; \
+        b_symbol = UNICODE_UPPER[ iterator (&iter_b)]; \
     } while ( while_predicate ); \
     if (move && (a_symbol == b_symbol)) { \
-        a_symbol = (iter_a == str_a) ? 0 : UPPER[ iterator (&iter_a)]; \
-        b_symbol = (iter_b == str_b) ? 0 : UPPER[ iterator (&iter_b)]; \
+        a_symbol = (iter_a == str_a) ? 0 : UNICODE_UPPER[ iterator (&iter_a)]; \
+        b_symbol = (iter_b == str_b) ? 0 : UNICODE_UPPER[ iterator (&iter_b)]; \
     } \
     return a_symbol - b_symbol; \
 }
