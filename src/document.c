@@ -3,11 +3,11 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "document.h"
 #include "unicode.h"
-#define DATA_EMPTY_PREFIX 1
-#define DATA_EMPTY_SUFFIX 1
+#define DATA_EMPTY_SUFFIX 1 // Needed for zero-byte terminator
 
 static void separate_into_lines(document_t* doc) {
     char* data_begin = doc->data;
@@ -15,7 +15,7 @@ static void separate_into_lines(document_t* doc) {
     char* last_line_begin = data_begin;
     doc->lines_cnt = 0;
     for (char* it = data_begin; it != data_end; ++it) {
-        if (*it == '\n' || *it == '\r') {
+        if (iscntrl(*it)) {
             *it = '\0';
         }
 
@@ -40,9 +40,11 @@ static void separate_into_lines(document_t* doc) {
     }
 }
 
+/* Some unicode documents have Byte Order Mark in the beginning. In UTF-8 it is used just
+ * for compability with UTF16 and UTF32. Let's remove it! */
 static void remove_bom(document_t* doc) {
     /* BOM : EF BB BF */
-    if (doc->data_size >= 3 + DATA_EMPTY_PREFIX + DATA_EMPTY_SUFFIX &&
+    if (doc->data_size >= 3 + DATA_EMPTY_SUFFIX &&
         doc->data[1] == '\xEF' && doc->data[2] == '\xBB' && doc->data[3] == '\xBF') {
         for (int i = 1; i <= 3; ++i) {
             doc->data[i] = 0;
@@ -62,11 +64,13 @@ document_t* read_document(const char* filename) {
     }
     int filesize = filestat.st_size;
 
+    /* Allocate and initialize document fields */
     document_t* doc = calloc(sizeof(document_t), 1);
-    doc->data_size = filesize + DATA_EMPTY_PREFIX + DATA_EMPTY_SUFFIX;
+    doc->data_size = filesize + DATA_EMPTY_SUFFIX;
     doc->data = malloc(doc->data_size);
-    doc->data[filesize + DATA_EMPTY_PREFIX] = doc->data[0] = '\0';
-    if (read(fd, doc->data + DATA_EMPTY_PREFIX, filesize) == -1) {
+    doc->data[filesize] = doc->data[0] = '\0';
+
+    if (read(fd, doc->data, filesize) == -1) {
         close_document(doc);
         return NULL;
     }
@@ -79,7 +83,7 @@ document_t* read_document(const char* filename) {
 }
 
 bool check_document(const document_t* doc, int* err_pos) {
-    const char* file_begin = doc->data + DATA_EMPTY_PREFIX;
+    const char* file_begin = doc->data;
     const char* iter = file_begin;
     const char* prev_iter = iter;
     int32_t symbol;
@@ -96,21 +100,23 @@ bool check_document(const document_t* doc, int* err_pos) {
 }
 
 int symbol_at(const document_t* doc, int pos) {
-    const char* iter = doc->data + pos + DATA_EMPTY_PREFIX;
+    const char* iter = doc->data + pos;
     return next_symbol(&iter);
 }
 
-#ifndef BUFFER_SIZE
-#define BUFFER_SIZE (2<<20)
+/* To decrease number of write() syscalls, let's use buffer. Standard fwrite()
+ * uses 8 KiB buffer. It's quite small. */
+#ifndef BUFFERED_WRITE_BUFFER_SIZE
+#define BUFFERED_WRITE_BUFFER_SIZE (1<<20) /* 1 MiB */
 #endif
 
 typedef struct {
-    char data[BUFFER_SIZE];
+    char data[BUFFERED_WRITE_BUFFER_SIZE];
     int used;
 } buffer_t;
 
 static inline int write_to_buffer(buffer_t* buffer, const char* src, int len) {
-    int write_len = BUFFER_SIZE - buffer->used;
+    int write_len = BUFFERED_WRITE_BUFFER_SIZE - buffer->used;
     if (len < write_len) {
         write_len = len;
     }
@@ -132,7 +138,7 @@ static inline bool buffered_write(int fd, buffer_t* buffer, const char* str, int
         int written = write_to_buffer(buffer, str, len);
         str += written;
         len -= written;
-        if (buffer->used == BUFFER_SIZE) {
+        if (buffer->used == BUFFERED_WRITE_BUFFER_SIZE) {
             int result = flush_buffer(buffer, fd);
             if (result == -1) {
                 return false;
@@ -143,7 +149,7 @@ static inline bool buffered_write(int fd, buffer_t* buffer, const char* str, int
 }
 
 bool print_document(const document_t* doc, const char* filename) {
-    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    int fd = creat(filename, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (fd == -1) {
         return false;
     }
@@ -164,6 +170,9 @@ bool print_document(const document_t* doc, const char* filename) {
 }
 
 void close_document(document_t* doc) {
+    if (doc == NULL) {
+        return;
+    }
     if (doc->data != NULL) {
         free(doc->data);
     }

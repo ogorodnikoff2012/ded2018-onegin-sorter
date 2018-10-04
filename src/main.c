@@ -5,28 +5,28 @@
 
 #include "document.h"
 #include "unicode.h"
+#include "macros.h"
 
-#define UNUSED(x) if (false) { x = x; }
-
-int less_cmp(const void*, const void*);
+/* Needed for unificaton */
+int pointers_cmp(const void*, const void*);
 
 typedef int (*comparator_t)(const void*, const void*);
-const comparator_t COMPARATORS[] = {unicode_lex_cmp, unicode_rev_lex_cmp, less_cmp};
+const comparator_t COMPARATORS[] = {unicode_lex_cmp, unicode_rev_lex_cmp, pointers_cmp};
 const char* TASK_NAMES[] = {"sorted", "rythms", "original"};
 const int N_TASKS = 3;
 const int TASK_NAMES_MAX_LENGTH = 40;
 
 typedef struct {
-    bool nocheck;
+    bool disable_check;
 } args_t;
 
 bool parse_args(int argc, char* argv[], args_t* args) {
-    args->nocheck = false;
+    args->disable_check = false;
     if (argc == 2) {
         return true;
     }
     if (argc == 3 && strcmp(argv[1], "-n") == 0) {
-        args->nocheck = true;
+        args->disable_check = true;
         return true;
     }
     return false;
@@ -36,8 +36,8 @@ void print_usage(FILE* stream, const char* progname) {
     fprintf(stream, "Usage: %s [-n] <input.txt>\n", progname);
 }
 
-int less_cmp(const void* a, const void* b) {
-    return *(char **)a - *(char **)b;
+int pointers_cmp(const void* a, const void* b) {
+    return *(void **)a - *(void **)b;
 }
 
 int main(int argc, char* argv[]) {
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     int err_pos = -1;
-    if (!args.nocheck && !check_document(document, &err_pos)) {
+    if (!args.disable_check && !check_document(document, &err_pos)) {
         fprintf(stderr, "Bad symbol at file %s at position %d: 0x%x\n", input_filename, err_pos, symbol_at(document, err_pos));
         return 1;
     }
